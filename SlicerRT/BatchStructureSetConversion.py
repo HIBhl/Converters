@@ -391,12 +391,17 @@ def main(argv):
             all_patients = slicer.dicomDatabase.patients()
             logging.info('Must Process Patients %s' % len(all_patients))
             for patient in all_patients:
-                slicer.mrmlScene.Clear(0) # clear the scene
-                DICOMUtils.loadPatientByUID(patient)
-                output_dir = os.path.join(output_folder,patient)
-                if not os.access(output_dir, os.F_OK):
-                    os.mkdir(output_dir)
-                save_rtslices(output_dir)
+                try:
+                    slicer.mrmlScene.Clear(0) # clear the scene
+                    DICOMUtils.loadPatientByUID(patient)
+                    output_dir = os.path.join(output_folder,patient)
+                    if not os.access(output_dir, os.F_OK):
+                        os.mkdir(output_dir)
+                    save_rtslices(output_dir)
+                except Exception, e:
+                    import traceback
+                    traceback.print_exc()
+                    logging.error('Failed to convert patient: %s', patient)
 
         else:
             logging.info("Import DICOM data from " + input_folder)
