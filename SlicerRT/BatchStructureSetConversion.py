@@ -160,15 +160,37 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
 
         return labelmapsToSave
 
+    def CleanFilePath(self,outputDir,fileName):
+        '''Clean up file name and set path'''
+        charsRoRemove = ['!', '?', ':', ';']
+        fileName = fileName.translate(None, ''.join(charsRoRemove))
+        fileName = fileName.replace(' ', '_')
+        return(outputDir + '/' + fileName)
+
+    def SaveSegmentScreenShots(self, outputDir):
+        segmentationNodes = slicer.util.getNodes('vtkMRMLSegmentationNode*')
+        for segmentationNode in segmentationNodes.values():
+            segmentation = segmentationNode.GetSegmentation()
+            segmentIDs = vtk.vtkStringArray()
+            segmentation.GetSegmentIDs(segmentIDs)
+            for segmentIDIndex in range(segmentIDs.GetNumberOfValues()):
+                segmentID = segmentIDs.GetValue(segmentIDIndex)
+                segment = segmentation.GetSegment(segmentID)
+                filePath = self.CleanFilePath(outputDir, segmentID + '.png')
+                bounds = [0,]*6
+                segment.GetBounds(bounds)
+                center = [ (bounds[0]+bounds[1])/2.,
+                           (bounds[2]+bounds[3])/2.,
+                           (bounds[4]+bounds[5])/2. ]
+                slicer.vtkMRMLSliceNode.JumpAllSlices(slicer.mrmlScene, *center)
+                slicer.util.delayDisplay("jumped to %s" % center, 100)
+                qt.QPixmap().grabWidget(slicer.util.mainWindow()).save(filePath)
+                logging.error("Saved image to %s" % filePath)
+
     def SaveLabelmaps(self, labelmapsToSave, outputDir):
         for labelmapNode in labelmapsToSave:
-            # Clean up file name and set path
-            fileName = labelmapNode.GetName() + '.nrrd'
-            charsRoRemove = ['!', '?', ':', ';']
-            fileName = fileName.translate(None, ''.join(charsRoRemove))
-            fileName = fileName.replace(' ', '_')
-            filePath = outputDir + '/' + fileName
-            logging.info("  Saving structure " + labelmapNode.GetName() + "\n    to file " + fileName)
+            filePath = self.CleanFilePath(outputDir, labelmapNode.GetName() + '.nrrd')
+            logging.info("  Saving structure " + labelmapNode.GetName() + "\n    to file " + filePath)
 
             # Save to file
             success = slicer.util.saveNode(labelmapNode, filePath)
@@ -180,13 +202,8 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
         sv_nodes = slicer.util.getNodes(node_key)
         logging.info("Save image volumes nodes to directory %s: %s" % (outputDir, ','.join(sv_nodes.keys())))
         for imageNode in sv_nodes.values():
-            # Clean up file name and set path
-            fileName = imageNode.GetName() + '.nrrd'
-            charsRoRemove = ['!', '?', ':', ';']
-            fileName = fileName.translate(None, ''.join(charsRoRemove))
-            fileName = fileName.replace(' ', '_')
-            filePath = outputDir + '/' + fileName
-            logging.info("  Saving image " + imageNode.GetName() + "\n    to file " + fileName)
+            filePath = self.CleanFilePath(outputDir, imageNode.GetName() + '.nrrd')
+            logging.info("  Saving image " + imageNode.GetName() + "\n    to file " + filePath)
 
             # Save to file
             success = slicer.util.saveNode(imageNode, filePath)
@@ -392,14 +409,18 @@ def main(argv):
         # Perform batch conversion
         logic = BatchStructureSetConversionLogic()
         def save_rtslices(output_dir):
-            # package the saving code into a subfunction
             logging.info("Convert loaded structure set to labelmap volumes")
             labelmaps = logic.ConvertStructureSetToLabelmap()
 
             logging.info("Save labelmaps to directory " + output_dir)
             logic.SaveLabelmaps(labelmaps, output_dir)
+
             if export_images:
                 logic.SaveImages(output_dir)
+
+            logging.info("Save screen shots to directory " + output_dir)
+            logic.SaveSegmentScreenShots(output_dir)
+
             logging.info("DONE")
 
         if exist_db:
