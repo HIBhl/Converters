@@ -81,7 +81,7 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
         except Exception, e:
             import traceback
             traceback.print_exc()
-            logging.error('Failed to open DICOM database', path)
+            logging.error("Failed to open DICOM database", path)
     def OpenDatabase(self):
         # Open temporary database and empty it
         try:
@@ -97,7 +97,7 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
         except Exception, e:
             import traceback
             traceback.print_exc()
-            logging.error('Failed to open temporary DICOM database')
+            logging.error("Failed to open temporary DICOM database")
 
     def ImportStudy(self, dicomDataDir):
         indexer = ctk.ctkDICOMIndexer()
@@ -120,12 +120,12 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
         segmentationNodes = slicer.util.getNodes('vtkMRMLSegmentationNode*')
 
         for segmentationNode in segmentationNodes.values():
-            logging.info('  Converting structure set ' + segmentationNode.GetName())
+            logging.info("  Converting structure set " + segmentationNode.GetName())
             # Set referenced volume as rasterization reference
             referenceVolume = slicer.vtkSlicerDicomRtImportExportModuleLogic.GetReferencedVolumeByDicomForSegmentation(
                 segmentationNode)
             if referenceVolume == None:
-                logging.error('No reference volume found for segmentation ' + segmentationNode.GetName())
+                logging.error("No reference volume found for segmentation " + segmentationNode.GetName())
                 continue
 
             # Perform conversion
@@ -143,7 +143,7 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
                     vtkSegmentationCore.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName())
                 if not binaryLabelmap:
                     logging.error(
-                        'Failed to retrieve binary labelmap from segment ' + segmentID + ' in segmentation ' + segmentationNode.GetName())
+                        "Failed to retrieve binary labelmap from segment " + segmentID + " in segmentation " + segmentationNode.GetName())
                     continue
                 labelmapNode = slicer.vtkMRMLLabelMapVolumeNode()
                 slicer.mrmlScene.AddNode(labelmapNode)
@@ -152,7 +152,7 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
                 if not slicer.vtkSlicerSegmentationsModuleLogic.CreateLabelmapVolumeFromOrientedImageData(
                         binaryLabelmap, labelmapNode):
                     logging.error(
-                        'Failed to create labelmap from segment ' + segmentID + ' in segmentation ' + segmentationNode.GetName())
+                        "Failed to create labelmap from segment " + segmentID + " in segmentation " + segmentationNode.GetName())
                     continue
 
                 # Append volume to list
@@ -168,12 +168,12 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
             fileName = fileName.translate(None, ''.join(charsRoRemove))
             fileName = fileName.replace(' ', '_')
             filePath = outputDir + '/' + fileName
-            logging.info('  Saving structure ' + labelmapNode.GetName() + '\n    to file ' + fileName)
+            logging.info("  Saving structure " + labelmapNode.GetName() + "\n    to file " + fileName)
 
             # Save to file
             success = slicer.util.saveNode(labelmapNode, filePath)
             if not success:
-                logging.error('Failed to save labelmap: ' + filePath)
+                logging.error("Failed to save labelmap: " + filePath)
 
     def SaveImages(self, outputDir, node_key = 'vtkMRMLScalarVolumeNode*'):
         # Save all of the ScalarVolumes (or whatever is in node_key) to NRRD files
@@ -186,12 +186,12 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
             fileName = fileName.translate(None, ''.join(charsRoRemove))
             fileName = fileName.replace(' ', '_')
             filePath = outputDir + '/' + fileName
-            logging.info('  Saving image ' + imageNode.GetName() + '\n    to file ' + fileName)
+            logging.info("  Saving image " + imageNode.GetName() + "\n    to file " + fileName)
 
             # Save to file
             success = slicer.util.saveNode(imageNode, filePath)
             if not success:
-                logging.error('Failed to save image volume: ' + filePath)
+                logging.error("Failed to save image volume: " + filePath)
 
 
 # ------------------------------------------------------------------------------
@@ -262,14 +262,14 @@ class BatchStructureSetConversionTest(ScriptedLoadableModuleTest):
                 if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
                     if downloaded == 0:
                         logging.info(
-                            'Downloading input data to folder\n' + self.dicomZipFilePath + '.\n\n  It may take a few minutes...')
-                    logging.info('Requesting download from %s...' % (url))
+                            "Downloading input data to folder\n" + self.dicomZipFilePath + ".\n\n  It may take a few minutes...")
+                    logging.info("Requesting download from %s..." % (url))
                     urllib.urlretrieve(url, filePath)
                     downloaded += 1
                 else:
-                    self.delayDisplay('Input data has been found in folder ' + self.dicomZipFilePath, self.delayMs)
+                    self.delayDisplay("Input data has been found in folder " + self.dicomZipFilePath, self.delayMs)
             if downloaded > 0:
-                self.delayDisplay('Downloading input data finished', self.delayMs)
+                self.delayDisplay("Downloading input data finished", self.delayMs)
 
             numOfFilesInDicomDataDir = len(
                 [name for name in os.listdir(self.dicomDataDir) if os.path.isfile(self.dicomDataDir + '/' + name)])
@@ -284,7 +284,7 @@ class BatchStructureSetConversionTest(ScriptedLoadableModuleTest):
         except Exception, e:
             import traceback
             traceback.print_exc()
-            logging.error('Test caused exception!\n' + str(e), self.delayMs * 2)
+            logging.error("Test caused exception!\n" + str(e), self.delayMs * 2)
 
     def TestSection_2OpenDatabase(self):
         self.delayDisplay("Open database", self.delayMs)
@@ -312,7 +312,7 @@ class BatchStructureSetConversionTest(ScriptedLoadableModuleTest):
         except Exception, e:
             import traceback
             traceback.print_exc()
-            self.delayDisplay('Test caused exception!\n' + str(e), self.delayMs * 2)
+            self.delayDisplay("Test caused exception!\n" + str(e), self.delayMs * 2)
         qt.QApplication.restoreOverrideCursor()
 
     def TestSection_6SaveLabelmaps(self):
@@ -323,7 +323,7 @@ class BatchStructureSetConversionTest(ScriptedLoadableModuleTest):
 
         self.logic.SaveLabelmaps(self.labelmapsToSave, self.outputDir)
 
-        self.delayDisplay('  Labelmaps saved to  %s' % (self.outputDir), self.delayMs)
+        self.delayDisplay("  Labelmaps saved to  %s" % (self.outputDir), self.delayMs)
         qt.QApplication.restoreOverrideCursor()
 
     def TestSection_0Clear(self):
@@ -339,7 +339,7 @@ class BatchStructureSetConversionTest(ScriptedLoadableModuleTest):
         if self.logic.originalDatabaseDirectory:
             self.logic.dicomWidget.onDatabaseDirectoryChanged(self.logic.originalDatabaseDirectory)
 
-        logging.info('Test finished')
+        logging.info("Test finished")
 
 
 def main(argv):
@@ -361,8 +361,11 @@ def main(argv):
 
         # Check required arguments
         if args.input_folder == "-":
+            logging.error("Please specify input DICOM study folder!")
             logging.warning('Please specify input DICOM study folder!')
         if args.output_folder == ".":
+            logging.error(
+                "Current directory is selected as output folder (default). To change it, please specify --output-folder")
             logging.info(
                 'Current directory is selected as output folder (default). To change it, please specify --output-folder')
 
@@ -401,7 +404,7 @@ def main(argv):
                 except Exception, e:
                     import traceback
                     traceback.print_exc()
-                    logging.error('Failed to convert patient: %s', patient)
+                    logging.error("Failed to convert patient: %s", patient)
 
         else:
             logging.info("Import DICOM data from " + input_folder)
