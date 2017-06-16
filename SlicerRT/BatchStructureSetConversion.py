@@ -351,23 +351,37 @@ def main(argv):
         parser.add_argument("-x", "--exist-db", dest="exist_db",
                             default=False, required=False, action='store_true',
                             help="Process an existing database")
+        parser.add_argument("-p", "--patient", "--patients", dest="patients",
+                            default=[], required=False, nargs='+',
+                            help="Process particular patients in the existing database")
         parser.add_argument("-m", "--export-images", dest="export_images",
                             default=False, required=False, action='store_true',
                             help="Export image data with labelmaps")
         parser.add_argument("-o", "--output-folder", dest="output_folder", metavar="PATH",
                             default=".", help="Folder for output labelmaps")
 
+        parser.add_argument("--stop-on-error", dest="stop_on_error",
+                            default=False, required=False, action='store_true',
+                            help="Halt the script if processing a patient fails")
+        parser.add_argument("--do-not-exit", dest="do_not_exit",
+                            default=False, required=False, action='store_true',
+                            help="Don't exit Slicer after performing conversion(s)")
+
         args = parser.parse_args(argv)
+        logging.info("Running with arguments:")
+        logging.info(args)
 
         # Check required arguments
         if args.input_folder == "-":
             logging.error("Please specify input DICOM study folder!")
-            logging.warning('Please specify input DICOM study folder!')
+            sys.exit(-1)
         if args.output_folder == ".":
             logging.error(
                 "Current directory is selected as output folder (default). To change it, please specify --output-folder")
-            logging.info(
-                'Current directory is selected as output folder (default). To change it, please specify --output-folder')
+            sys.exit(-1)
+        if len(args.patients) > 0 and not args.exist_db:
+            logging.error("Can only specify paitents in an existing database")
+            sys.exit(-1)
 
         # Convert to python path style
         input_folder = args.input_folder.replace('\\', '/')
@@ -389,13 +403,18 @@ def main(argv):
             logging.info("DONE")
 
         if exist_db:
-            logging.info('BatchStructureSet Running in Existing Database Mode')
+            logging.info("BatchStructureSet Running in Existing Database Mode")
             logic.LoadDatabase(input_folder)
             all_patients = slicer.dicomDatabase.patients()
-            logging.info('Must Process Patients %s' % len(all_patients))
+            if len(args.patients) > 0:
+                all_patients = args.patients
+            logging.info("Must Process Patients %s" % len(all_patients))
             for patient in all_patients:
                 try:
                     slicer.mrmlScene.Clear(0) # clear the scene
+                    if len(slicer.dicomDatabase.studiesForPatient(patient)) == 0:
+                        logging.warning("Skipping patient with no studies: %s" % patient)
+                        continue
                     DICOMUtils.loadPatientByUID(patient)
                     output_dir = os.path.join(output_folder,patient)
                     if not os.access(output_dir, os.F_OK):
@@ -405,6 +424,9 @@ def main(argv):
                     import traceback
                     traceback.print_exc()
                     logging.error("Failed to convert patient: %s", patient)
+                    if args.stop_on_error:
+                        logging.warning("Stopped processing after failure on patient %s" % patient)
+                        sys.exit(-1)
 
         else:
             logging.info("Import DICOM data from " + input_folder)
@@ -419,7 +441,8 @@ def main(argv):
 
     except Exception, e:
         print(e)
-    sys.exit(0)
+    if not args.do_not_exit:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
