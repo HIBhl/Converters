@@ -1,11 +1,14 @@
 from __future__ import absolute_import, division, print_function # Makes moving python2 to python3 much easier and ensures that nasty bugs involving integer division don't creep in
+
+import argparse
+import logging
 import os
+import sys
+import time
 import unittest
+
 import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
-import argparse
-import sys
-import logging
 from DICOMLib import DICOMUtils
 
 
@@ -168,6 +171,8 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
         return(outputDir + '/' + fileName)
 
     def SaveSegmentScreenShots(self, outputDir):
+        layoutManager = slicer.app.layoutManager()
+        threeDView =layoutManager.threeDWidget(0).threeDView()
         segmentationNodes = slicer.util.getNodes('vtkMRMLSegmentationNode*')
         for segmentationNode in segmentationNodes.values():
             segmentation = segmentationNode.GetSegmentation()
@@ -184,6 +189,7 @@ class BatchStructureSetConversionLogic(ScriptedLoadableModuleLogic):
                            (bounds[4]+bounds[5])/2. ]
                 slicer.vtkMRMLSliceNode.JumpAllSlices(slicer.mrmlScene, *center)
                 slicer.util.delayDisplay("jumped to %s" % center, 100)
+                threeDView.resetFocalPoint()
                 qt.QPixmap().grabWidget(slicer.util.mainWindow()).save(filePath)
                 logging.error("Saved image to %s" % filePath)
 
@@ -397,7 +403,7 @@ def main(argv):
                 "Current directory is selected as output folder (default). To change it, please specify --output-folder")
             sys.exit(-1)
         if len(args.patients) > 0 and not args.exist_db:
-            logging.error("Can only specify paitents in an existing database")
+            logging.error("Can only specify patients in an existing database")
             sys.exit(-1)
 
         # Convert to python path style
@@ -421,33 +427,90 @@ def main(argv):
             logging.info("Save screen shots to directory " + output_dir)
             logic.SaveSegmentScreenShots(output_dir)
 
-            logging.info("DONE")
+            logging.info("DONE saving to %s" % output_dir)
+
+        def create_results_page(output_folder, converted_patients, skipped_patients, failed_patients):
+            """Make an html page that summarizes the results with thumbnails
+            for the screenshots"""
+
+            fp = open(os.path.join(output_folder,"index.html"),"w")
+
+            fp.write('''
+                <style>
+                /* based on: https://www.w3schools.com/howto/howto_css_thumbnail.asp */
+                img {
+                    border: 1px solid #ddd; /* Gray border */
+                    border-radius: 4px;  /* Rounded border */
+                    padding: 5px; /* Some padding */
+                    width: 550px; /* Set a small width */
+                }
+                /* Add a hover effect (blue shadow) */
+                img:hover {
+                    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
+                }
+                </style>
+
+                <body>
+                ''')
+
+            fp.write("<p>converted: %s</p>" % converted_patients)
+            fp.write("<p>skipped: %s</p>" % skipped_patients)
+            fp.write("<p>failed: %s</p>" % failed_patients)
+            for patient in converted_patients:
+                fp.write('''
+                    <a target="_blank" href="%s/GTV-1.png">
+                      <img src="%s/GTV-1.png" alt="%s">
+                    </a>
+                    <p>Patient: %s</p>
+                    ''' % (patient,patient,patient,patient,))
+
+            fp.write("</body>")
+            fp.close()
 
         if exist_db:
             logging.info("BatchStructureSet Running in Existing Database Mode")
+            database_start_time = time.time()
             logic.LoadDatabase(input_folder)
             all_patients = slicer.dicomDatabase.patients()
             if len(args.patients) > 0:
                 all_patients = args.patients
             logging.info("Must Process Patients %s" % len(all_patients))
+            converted_patients = []
+            skipped_patients = []
+            failed_patients = []
             for patient in all_patients:
+                patient_start_time = time.time()
                 try:
                     slicer.mrmlScene.Clear(0) # clear the scene
                     if len(slicer.dicomDatabase.studiesForPatient(patient)) == 0:
                         logging.warning("Skipping patient with no studies: %s" % patient)
+                        skipped_patients.append(patient)
                         continue
                     DICOMUtils.loadPatientByUID(patient)
                     output_dir = os.path.join(output_folder,patient)
                     if not os.access(output_dir, os.F_OK):
                         os.mkdir(output_dir)
                     save_rtslices(output_dir)
+                    converted_patients.append(patient)
                 except Exception, e:
                     import traceback
                     traceback.print_exc()
                     logging.error("Failed to convert patient: %s", patient)
+                    failed_patients.append(patient)
                     if args.stop_on_error:
                         logging.warning("Stopped processing after failure on patient %s" % patient)
                         sys.exit(-1)
+                logging.info("Finished patient %s in %d seconds" % (patient, time.time() - patient_start_time))
+            create_results_page(output_folder, converted_patients, skipped_patients, failed_patients)
+            logging.info("\n------------")
+            logging.info("Results")
+            logging.info("------------\n")
+            logging.info("Finished database in %d seconds" % (time.time() - database_start_time))
+            logging.info("Converted %d patients" % len(converted_patients))
+            logging.info("Skipped %d patients" % len(skipped_patients))
+            logging.error("Conversion failed on %d patients" % len(failed_patients))
+            logging.error("Failed patients:")
+            logging.error(failed_patients)
 
         else:
             logging.info("Import DICOM data from " + input_folder)
@@ -458,9 +521,9 @@ def main(argv):
             logic.LoadFirstPatientIntoSlicer()
             save_rtslices(output_folder)
 
-
-
     except Exception, e:
+        import traceback
+        traceback.print_exc()
         print(e)
     if not args.do_not_exit:
         sys.exit(0)
